@@ -1,0 +1,17 @@
+int n;
+
+input n;
+int [n] arr;
+
+int i;
+
+while (i < n) {
+    input arr[i];
+    i = i + 1;
+}
+
+i = 0;
+while (i < n) {
+    output arr[i];
+    i = i + 1;
+}

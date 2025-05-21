@@ -1,0 +1,25 @@
+int [] arr = {5, 2, 8, 3, 1, 9, 4, 6, 7, 0};
+int i;
+int j;
+int temp;
+int n;
+
+n = 10ц;
+while (i < n) {
+    j = i + 1;
+    while (j < n) {
+        if (arr[j] < arr[i]) {
+            temp = arr[i];
+            arr[i] = arr[j];
+            arr[j] = temp;
+        }
+        j = j + 1;
+    }
+    i = i + 1;
+}
+
+i = 0;
+while (i < n) {
+    output arr[i];
+    i = i + 1;
+}

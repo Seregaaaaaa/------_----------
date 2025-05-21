@@ -1,0 +1,12 @@
+float n;
+float i = 1;
+float result = 1;
+
+input n;
+
+while (i < n + 1) {
+    result = result * i;
+    i = i + 1;
+}
+
+output result;
