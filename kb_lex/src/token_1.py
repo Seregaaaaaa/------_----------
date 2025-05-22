@@ -4,10 +4,8 @@ class Token:
         self.token_type = token_type
         if token_type == TokenType.INTEGER_CONST:
             self.value = self.str_to_int(value)
-            print(type(self.value))
         elif token_type == TokenType.FLOAT_CONST:
             self.value = self.str_to_float(value)
-            print(type(self.value))
         else:
             self.value = value
         self.line = line

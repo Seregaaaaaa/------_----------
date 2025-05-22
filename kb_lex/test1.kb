@@ -4,7 +4,7 @@ int j;
 int temp;
 int n;
 
-n = 10ц;
+n = 10;
 while (i < n) {
     j = i + 1;
     while (j < n) {
