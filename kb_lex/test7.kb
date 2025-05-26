@@ -4,6 +4,7 @@ input n;
 int [n] arr;
 
 int i;
+i = 0;
 
 while (i < n) {
     input arr[i];

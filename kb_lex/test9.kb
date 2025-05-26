@@ -1,6 +1,8 @@
 int n;
-int i = 1;
-int tens = 10;
+int i;
+i = 1;
+int tens;
+tens = 10;
 
 input n;
 

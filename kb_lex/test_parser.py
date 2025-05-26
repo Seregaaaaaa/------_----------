@@ -15,7 +15,6 @@ def run_parser_test(filename):
     print(f"\nАнализ файла: {filename}")
     print("=" * 50)
     
-    # Лексический анализ
     tokens = analyze(source_code)
     
     print("\nРезультаты лексического анализа:")
@@ -24,7 +23,6 @@ def run_parser_test(filename):
         value_str = f" = {token.value}" if token.value else ""
         print(f"Строка {token.line}, позиция {token.position}: {token.token_type.name}{value_str}")
     
-    # Синтаксический анализ и генерация ОПС
     parser = Parser(tokens)
     
     try:

@@ -1,6 +1,17 @@
-int [] arrFL = {5, 2, 8, 3, 1, 9, 4, 6, 7, 0};
+int [10] arrFL;
+arrFL[0] = 5;
+arrFL[1] = 2;
+arrFL[2] = 8;
+arrFL[3] = 3;
+arrFL[4] = 1;
+arrFL[5] = 9;
+arrFL[6] = 4;
+arrFL[7] = 6;
+arrFL[8] = 7;
+arrFL[9] = 0;
 
-int a = arrFL[1] * 2;
+int a;
+a = arrFL[1] * 2;
 
 a = 3 * arrFL[1];
 

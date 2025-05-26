@@ -1,5 +1,25 @@
-int [] arr = {5, 2, 8, 3, 1, 9, 4, 6, 7, 0};
+int [10] arr;
+arr[0] = 5;
+arr[1] = 2;
+arr[2] = 8;
+arr[3] = 3;
+arr[4] = 1;
+arr[5] = 9;
+arr[6] = 4;
+arr[7] = 6;
+arr[8] = 7;
+arr[9] = 0;
 
-int [] secondArr = {5, arr[0], 8, 3, 1, 9, 4, 6, 7, 0};
+int [10] secondArr;
+secondArr[0] = 5;
+secondArr[1] = arr[0];
+secondArr[2] = 8;
+secondArr[3] = 3;
+secondArr[4] = 1;
+secondArr[5] = 9;
+secondArr[6] = 4;
+secondArr[7] = 6;
+secondArr[8] = 7;
+secondArr[9] = 0;
 
 output secondArr[1];

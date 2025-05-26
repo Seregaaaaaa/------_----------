@@ -5,15 +5,15 @@ from .symbol_table import SymbolTable
 
 class Parser:
     def __init__(self, tokens):
-        self.tokens = tokens  # Список токенов от лексического анализатора
-        self.current_index = 0  # Индекс текущего токена
-        self.stack = []  # Магазин (стек) для синтаксического анализатора
-        self.rpn_generator = RPNGenerator()  # Генератор ОПС
-        self.symbol_table = SymbolTable()  # Таблица символов
-        self.data_types_stack = []  # Стек для хранения типов данных
-        self.label_stack = []  # Стек для хранения меток (адресов) для операторов перехода
+        self.tokens = tokens  
+        self.current_index = 0  
+        self.stack = []  
+        self.rpn_generator = RPNGenerator()  
+        self.symbol_table = SymbolTable()  
+        self.data_types_stack = []  
+        self.label_stack = []  
         
-        # Контекстная информация
+
         self.context = {
             "in_array_declaration": False,  # Находимся в объявлении массива
             "in_array_initialization": False,  # Находимся в инициализации массива
@@ -28,7 +28,7 @@ class Parser:
             "last_token": None  # Последний обработанный токен
         }
         
-        # Инициализация стека и начало разбора
+
         self.stack.append(TokenType.EOF)
         self.stack.append("<Программа>")
         
@@ -36,7 +36,7 @@ class Parser:
         """Возвращает текущий токен или токен EOF, если достигнут конец списка"""
         if self.current_index < len(self.tokens):
             return self.tokens[self.current_index]
-        # Возвращаем токен конца файла, если индекс за пределами списка
+
         return Token(TokenType.EOF, "", -1, -1)
     
     def advance(self):
@@ -57,604 +57,657 @@ class Parser:
     
     def build_parse_table(self):
         """
-        Строит таблицу синтаксического анализа для LL(1) парсера на основе грамматики в форме Грейбаха
+        Строит таблицу синтаксического анализа для LL(1) парсера на основе грамматики в форме Грейбаха.
         Возвращает словарь: {нетерминал: {терминал: список правил}}
         """
         table = {}
         
-        # Правила для <Программа>
+        # <Программа>
         table["<Программа>"] = {
-            TokenType.INT: [TokenType.INT, "<ОператорDT>", "<Список операторов>"],
-            TokenType.FLOAT: [TokenType.FLOAT, "<ОператорDT>", "<Список операторов>"],
-            TokenType.IF: [TokenType.IF, TokenType.LPAREN, "<Логическое выражение>", TokenType.RPAREN, "<Блок>", "<Альтернативное действие>", "<Список операторов>"],
-            TokenType.IDENTIFIER: [TokenType.IDENTIFIER, "<ПрисваиваниеIdent>", TokenType.SEMICOLON, "<Список операторов>"],
-            TokenType.WHILE: [TokenType.WHILE, TokenType.LPAREN, "<Логическое выражение>", TokenType.RPAREN, "<Блок>", "<Список операторов>"],
+            TokenType.INT: ["<push_int_type>", TokenType.INT, "<ОператорDT>", "<Список операторов>"],
+            TokenType.FLOAT: ["<push_float_type>", TokenType.FLOAT, "<ОператорDT>", "<Список операторов>"],
+            TokenType.IF: [TokenType.IF, TokenType.LPAREN, "<Логическое выражение>", TokenType.RPAREN, "<after_if_condition>", "<Блок>", "<Альтернативное действие_extended>", "<Список операторов>"],
+            TokenType.IDENTIFIER: ["<save_identifier_token>", TokenType.IDENTIFIER, "<ПрисваиваниеIdent>", TokenType.SEMICOLON, "<Список операторов>"],
+            TokenType.WHILE: [TokenType.WHILE, "<while>", TokenType.LPAREN, "<Логическое выражение>", TokenType.RPAREN, "<after_while_condition>", "<Блок>", "<end_while_block>", "<Список операторов>"],
             TokenType.INPUT: [TokenType.INPUT, "<ВводInput>", "<Список операторов>"],
-            TokenType.OUTPUT: [TokenType.OUTPUT, "<Логическое выражение>", TokenType.SEMICOLON, "<Список операторов>"]
+            TokenType.OUTPUT: [TokenType.OUTPUT, "<Логическое выражение>", "<gen_output_op>", TokenType.SEMICOLON, "<Список операторов>"]
         }
         
-        # Правила для <ОператорDT>
+        # <ОператорDT>
         table["<ОператорDT>"] = {
-            TokenType.IDENTIFIER: [TokenType.IDENTIFIER, "<ОператорDTIdent>", TokenType.SEMICOLON],
-            TokenType.LSQUARE: [TokenType.LSQUARE, TokenType.RSQUARE, TokenType.IDENTIFIER, "<ОператорDTIdent>", TokenType.SEMICOLON]
+            TokenType.IDENTIFIER: [
+                "<save_identifier_token>", 
+                TokenType.IDENTIFIER, 
+                "<add_variable_declaration>", 
+                "<ОператорDTIdent>", 
+                TokenType.SEMICOLON
+            ],
+            TokenType.LSQUARE: [
+                TokenType.LSQUARE, 
+                "<ОператорDT_array>"
+            ]
         }
         
-        # Правила для <Список операторов>
+        # <ОператорDT_array> - для обработки объявлений массивов
+        table["<ОператорDT_array>"] = {
+            # int [expr] identifier; - массив с заданным размером
+            TokenType.UNARY_MINUS: [
+                "<Выражение>", 
+                TokenType.RSQUARE, 
+                "<save_identifier_token>", 
+                TokenType.IDENTIFIER, 
+                "<add_dynamic_array_declaration>", 
+                TokenType.SEMICOLON
+            ],
+            TokenType.IDENTIFIER: [
+                "<Выражение>", 
+                TokenType.RSQUARE, 
+                "<save_identifier_token>", 
+                TokenType.IDENTIFIER, 
+                "<add_dynamic_array_declaration>", 
+                TokenType.SEMICOLON
+            ],
+            TokenType.INTEGER_CONST: [
+                "<Выражение>", 
+                TokenType.RSQUARE, 
+                "<save_identifier_token>", 
+                TokenType.IDENTIFIER, 
+                "<add_dynamic_array_declaration>", 
+                TokenType.SEMICOLON
+            ],
+            TokenType.FLOAT_CONST: [
+                "<Выражение>", 
+                TokenType.RSQUARE, 
+                "<save_identifier_token>", 
+                TokenType.IDENTIFIER, 
+                "<add_dynamic_array_declaration>", 
+                TokenType.SEMICOLON
+            ],
+            TokenType.LPAREN: [
+                "<Выражение>", 
+                TokenType.RSQUARE, 
+                "<save_identifier_token>", 
+                TokenType.IDENTIFIER, 
+                "<add_dynamic_array_declaration>", 
+                TokenType.SEMICOLON
+            ],
+            # int [] identifier = { ... }; - инициализация массива списком
+            TokenType.RSQUARE: [
+                TokenType.RSQUARE, 
+                "<save_identifier_token>", 
+                TokenType.IDENTIFIER, 
+                "<add_array_declaration_for_init>", 
+                TokenType.ASSIGN, 
+                "<gen_array_init_start>",
+                TokenType.LCURLY, 
+                "<Инициализаторы>", 
+                TokenType.RCURLY,
+                "<gen_array_init_end>",
+                TokenType.SEMICOLON
+            ]
+        }
+        
+        # <Список операторов>
         table["<Список операторов>"] = {
-            TokenType.INT: [TokenType.INT, "<ОператорDT>", "<Список операторов>"],
-            TokenType.FLOAT: [TokenType.FLOAT, "<ОператорDT>", "<Список операторов>"],
-            TokenType.IF: [TokenType.IF, TokenType.LPAREN, "<Логическое выражение>", TokenType.RPAREN, "<Блок>", "<Альтернативное действие>", "<Список операторов>"],
-            TokenType.IDENTIFIER: [TokenType.IDENTIFIER, "<ПрисваиваниеIdent>", TokenType.SEMICOLON, "<Список операторов>"],
-            TokenType.WHILE: [TokenType.WHILE, TokenType.LPAREN, "<Логическое выражение>", TokenType.RPAREN, "<Блок>", "<Список операторов>"],
+            TokenType.INT: ["<push_int_type>", TokenType.INT, "<ОператорDT>", "<Список операторов>"],
+            TokenType.FLOAT: ["<push_float_type>", TokenType.FLOAT, "<ОператорDT>", "<Список операторов>"],
+            TokenType.IF: [TokenType.IF, TokenType.LPAREN, "<Логическое выражение>", TokenType.RPAREN, "<after_if_condition>", "<Блок>", "<Альтернативное действие_extended>", "<Список операторов>"],
+            TokenType.IDENTIFIER: ["<save_identifier_token>", TokenType.IDENTIFIER, "<ПрисваиваниеIdent>", TokenType.SEMICOLON, "<Список операторов>"],
+            TokenType.WHILE: [TokenType.WHILE, "<while>", TokenType.LPAREN, "<Логическое выражение>", TokenType.RPAREN, "<after_while_condition>", "<Блок>", "<end_while_block>", "<Список операторов>"],
             TokenType.INPUT: [TokenType.INPUT, "<ВводInput>", "<Список операторов>"],
-            TokenType.OUTPUT: [TokenType.OUTPUT, "<Логическое выражение>", TokenType.SEMICOLON, "<Список операторов>"],
+            TokenType.OUTPUT: [TokenType.OUTPUT, "<Логическое выражение>", "<gen_output_op>", TokenType.SEMICOLON, "<Список операторов>"],
         }
-        
-        # Пустой список (lambda) для всех остальных токенов в <Список операторов>
+        explicitly_defined_tokens_for_list_ops = list(table["<Список операторов>"].keys())
         for token_type in TokenType:
-            if token_type not in [TokenType.INT, TokenType.FLOAT, TokenType.IF, 
-                                  TokenType.IDENTIFIER, TokenType.WHILE, 
-                                  TokenType.INPUT, TokenType.OUTPUT]:
-                if "<Список операторов>" not in table:
-                    table["<Список операторов>"] = {}
-                table["<Список операторов>"][token_type] = []  # lambda (пустое правило)
+            if token_type not in explicitly_defined_tokens_for_list_ops:
+                table["<Список операторов>"][token_type] = []
+
+        # <Инициализаторы>
+        table["<Инициализаторы>"] = {}
+        # Токены, которые могут начинать выражение (первый элемент списка или вложенный инициализатор).
+        # Они соответствуют начальным токенам для нетерминала <Выражение>.
+        expression_starter_tokens = [
+            TokenType.UNARY_MINUS, TokenType.IDENTIFIER, TokenType.INTEGER_CONST,
+            TokenType.FLOAT_CONST, TokenType.LPAREN, TokenType.LCURLY
+        ]
+        for token_type in expression_starter_tokens:
+            table["<Инициализаторы>"][token_type] = ["<Выражение>", "<Инициализаторы_продолжение>"]
         
-        # Правила для <Инициализаторы>
-        table["<Инициализаторы>"] = {
-            TokenType.UNARY_MINUS: [TokenType.UNARY_MINUS, "<Фактор>", "<Терм*>", "<Выражение*>", "<Инициализаторы*>"],
-            TokenType.IDENTIFIER: [TokenType.IDENTIFIER, "<ФакторIdent>", "<Терм*>", "<Выражение*>", "<Инициализаторы*>"],
-            TokenType.INTEGER_CONST: ["константа", "<Терм*>", "<Выражение*>", "<Инициализаторы*>"],
-            TokenType.FLOAT_CONST: ["константа", "<Терм*>", "<Выражение*>", "<Инициализаторы*>"],
-            TokenType.LPAREN: [TokenType.LPAREN, "<Логическое выражение>", TokenType.RPAREN, "<Терм*>", "<Выражение*>", "<Инициализаторы*>"]
+        # Правило для пустого списка инициализаторов: например, int arr[] = {};
+        # Когда <Инициализаторы> на вершине стека, а следующий токен RCURLY.
+        table["<Инициализаторы>"][TokenType.RCURLY] = [] # Эпсилон-продукция
+
+        # <Инициализаторы_продолжение>
+        # Этот нетерминал обрабатывает хвост списка: ", <Выражение>, <Выражение> ..."
+        table["<Инициализаторы_продолжение>"] = {
+            TokenType.COMMA: [TokenType.COMMA, "<Выражение>", "<Инициализаторы_продолжение>"]
         }
-        
-        # Правила для <Инициализаторы*>
-        table["<Инициализаторы*>"] = {
-            TokenType.COMMA: [TokenType.COMMA, "<Выражение>", "<Инициализаторы*>"]
-        }
-        for token_type in TokenType:
-            if token_type != TokenType.COMMA:
-                if "<Инициализаторы*>" not in table:
-                    table["<Инициализаторы*>"] = {}
-                table["<Инициализаторы*>"][token_type] = []  # lambda
-        
-        # Правила для <Альтернативное действие>
-        table["<Альтернативное действие>"] = {
-            TokenType.ELSE: [TokenType.ELSE, "<Блок>"]
+        # Эпсилон-продукция, когда список заканчивается (т.е. следующий токен RCURLY)
+        table["<Инициализаторы_продолжение>"][TokenType.RCURLY] = []
+        # Если после запятой или в начале списка элементов нет других токенов, кроме RCURLY,
+        # это будет обработано как синтаксическая ошибка (отсутствие правила).
+
+        # <Альтернативное действие_extended>
+        table["<Альтернативное действие_extended>"] = {
+            TokenType.ELSE: [TokenType.ELSE, "<start_else_block>", "<Блок>", "<end_if_block>"]
         }
         for token_type in TokenType:
             if token_type != TokenType.ELSE:
-                if "<Альтернативное действие>" not in table:
-                    table["<Альтернативное действие>"] = {}
-                table["<Альтернативное действие>"][token_type] = []  # lambda
-        
-        # Правила для <Блок>
+                 table["<Альтернативное действие_extended>"].setdefault(token_type, ["<end_if_block>"])
+
+        # <Блок>
         table["<Блок>"] = {
             TokenType.LCURLY: [TokenType.LCURLY, "<Список операторов>", TokenType.RCURLY]
         }
         
-        # Правила для <Логическое выражение>
+        # <Логическое выражение>
+        # Определяет порядок разбора операций: арифметические -> сравнения -> равенство -> И -> ИЛИ
         table["<Логическое выражение>"] = {
-            TokenType.UNARY_MINUS: ["~", "<Фактор>", "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>", "<Логическое И*>", "<Логическое выражение*>"],
-            TokenType.IDENTIFIER: ["идентификатор", "<ФакторIdent>", "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>", "<Логическое И*>", "<Логическое выражение*>"],
-            TokenType.INTEGER_CONST: ["константа", "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>", "<Логическое И*>", "<Логическое выражение*>"],
-            TokenType.FLOAT_CONST: ["константа", "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>", "<Логическое И*>", "<Логическое выражение*>"],
-            TokenType.LPAREN: ["(", "<Логическое выражение>", ")", "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>", "<Логическое И*>", "<Логическое выражение*>"]
+            TokenType.UNARY_MINUS: [TokenType.UNARY_MINUS, "<Фактор>", "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>", "<ЛогическоеИ*>", "<ЛогическоеВыражение*>"],
+            TokenType.IDENTIFIER: [
+                "<save_current_token_as_factor>",  # Сохраняем токен перед разбором
+                TokenType.IDENTIFIER, 
+                "<ФакторIdent>", 
+                "<Терм*>", 
+                "<Выражение*>", 
+                "<Сравнение*>", 
+                "<Проверка равенства*>", 
+                "<ЛогическоеИ*>", 
+                "<ЛогическоеВыражение*>"
+            ],
+            TokenType.INTEGER_CONST: [TokenType.INTEGER_CONST, "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>", "<ЛогическоеИ*>", "<ЛогическоеВыражение*>"],
+            TokenType.FLOAT_CONST: [TokenType.FLOAT_CONST, "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>", "<ЛогическоеИ*>", "<ЛогическоеВыражение*>"],
+            TokenType.LPAREN: [TokenType.LPAREN, "<Логическое выражение>", TokenType.RPAREN, "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>", "<ЛогическоеИ*>", "<ЛогическоеВыражение*>"],
         }
         
-        # Правила для <Логическое выражение*>
+        # <Логическое выражение*>
         table["<Логическое выражение*>"] = {
             TokenType.OR: ["|", "<Логическое И>", "<Логическое выражение*>"]
         }
         for token_type in TokenType:
             if token_type != TokenType.OR:
-                if "<Логическое выражение*>" not in table:
-                    table["<Логическое выражение*>"] = {}
-                table["<Логическое выражение*>"][token_type] = []  # lambda
+                table["<Логическое выражение*>"][token_type] = []
         
-        # Правила для <Логическое И>
+        # <Логическое И>
         table["<Логическое И>"] = {
-            TokenType.UNARY_MINUS: ["~", "<Фактор>", "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>", "<Логическое И*>"],
-            TokenType.IDENTIFIER: ["идентификатор", "<ФакторIdent>", "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>", "<Логическое И*>"],
-            TokenType.INTEGER_CONST: ["константа", "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>", "<Логическое И*>"],
-            TokenType.FLOAT_CONST: ["константа", "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>", "<Логическое И*>"],
-            TokenType.LPAREN: ["(", "<Логическое выражение>", ")", "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>", "<Логическое И*>"]
+            TokenType.UNARY_MINUS: ["~", "<Фактор>", "<Терм*>", "<Выражение*>", "<Сравнение*_wrapper>", "<ПроверкаРавенства*_wrapper>", "<Логическое И*>"],
+            TokenType.IDENTIFIER: ["идентификатор", "<ФакторIdent>", "<Терм*>", "<Выражение*>", "<Сравнение*_wrapper>", "<ПроверкаРавенства*_wrapper>", "<Логическое И*>"],
+            TokenType.INTEGER_CONST: ["константа", "<Терм*>", "<Выражение*>", "<Сравнение*_wrapper>", "<ПроверкаРавенства*_wrapper>", "<Логическое И*>"],
+            TokenType.FLOAT_CONST: ["константа", "<Терм*>", "<Выражение*>", "<Сравнение*_wrapper>", "<ПроверкаРавенства*_wrapper>", "<Логическое И*>"],
+            TokenType.LPAREN: ["(", "<Логическое выражение>", ")", "<Терм*>", "<Выражение*>", "<Сравнение*_wrapper>", "<ПроверкаРавенства*_wrapper>", "<Логическое И*>"]
         }
-        
-        # Правила для <Логическое И*>
+
+        # <Логическое И*>_wrapper and <Логическое И*>
+        table["<ЛогическоеИ*_wrapper>"] = { 
+            token_type: ["<Логическое И>", "<Логическое И*>"] for token_type in TokenType 
+        }
         table["<Логическое И*>"] = {
             TokenType.AND: ["&", "<Проверка равенства>", "<Логическое И*>"]
         }
         for token_type in TokenType:
             if token_type != TokenType.AND:
-                if "<Логическое И*>" not in table:
-                    table["<Логическое И*>"] = {}
-                table["<Логическое И*>"][token_type] = []  # lambda
+                 table["<Логическое И*>"].setdefault(token_type, [])
         
-        # Правила для <ОператорDTIdent>
+        # <ОператорDTIdent>
         table["<ОператорDTIdent>"] = {
-            TokenType.ASSIGN: [TokenType.ASSIGN, "<Выражение>"],
-            TokenType.LSQUARE: [TokenType.LSQUARE, TokenType.INTEGER_CONST, TokenType.RSQUARE, TokenType.ASSIGN, "<Выражение>"],
+            TokenType.ASSIGN: [TokenType.ASSIGN, "<Выражение>", "<gen_assign_op>"],
+            TokenType.LSQUARE: [TokenType.LSQUARE, TokenType.INTEGER_CONST, TokenType.RSQUARE, TokenType.ASSIGN, "<Выражение>", "<gen_array_assign_op>"], # Для type arr[size] = expr;
         }
+        explicitly_defined_for_op_dt_ident = list(table["<ОператорDTIdent>"].keys())
         for token_type in TokenType:
-            if token_type not in [TokenType.ASSIGN, TokenType.LSQUARE]:
-                if "<ОператорDTIdent>" not in table:
-                    table["<ОператорDTIdent>"] = {}
-                table["<ОператорDTIdent>"][token_type] = []  # lambda
-        
-        # Правила для <ПрисваиваниеIdent>
+            if token_type not in explicitly_defined_for_op_dt_ident:
+                table["<ОператорDTIdent>"][token_type] = []  # Пустая продукция для простых объявлений
+
+        # <ПрисваиваниеIdent>
         table["<ПрисваиваниеIdent>"] = {
-            TokenType.ASSIGN: [TokenType.ASSIGN, "<Выражение>"],
-            TokenType.LSQUARE: [TokenType.LSQUARE, "<Логическое выражение>", TokenType.RSQUARE, TokenType.ASSIGN, "<Выражение>"]
+            TokenType.ASSIGN: ["<add_identifier_to_rpn_for_assign>", TokenType.ASSIGN, "<Выражение>", "<gen_assign_op>"],
+            TokenType.LSQUARE: ["<add_identifier_to_rpn_for_assign>", TokenType.LSQUARE, "<Логическое выражение>", TokenType.RSQUARE, TokenType.ASSIGN, "<Выражение>", "<gen_array_assign_op>"]
         }
         
-        # Правила для <Выражение>
+        # <Выражение>
         table["<Выражение>"] = {
             TokenType.UNARY_MINUS: [TokenType.UNARY_MINUS, "<Фактор>", "<Терм*>", "<Выражение*>"],
-            TokenType.IDENTIFIER: [TokenType.IDENTIFIER, "<ФакторIdent>", "<Терм*>", "<Выражение*>"],
+            TokenType.IDENTIFIER: [
+                "<save_current_token_as_factor>",  # Сохраняем токен перед разбором
+                TokenType.IDENTIFIER, 
+                "<ФакторIdent>", 
+                "<Терм*>", 
+                "<Выражение*>"
+            ],
             TokenType.INTEGER_CONST: [TokenType.INTEGER_CONST, "<Терм*>", "<Выражение*>"],
             TokenType.FLOAT_CONST: [TokenType.FLOAT_CONST, "<Терм*>", "<Выражение*>"],
             TokenType.LPAREN: [TokenType.LPAREN, "<Логическое выражение>", TokenType.RPAREN, "<Терм*>", "<Выражение*>"],
             TokenType.LCURLY: [TokenType.LCURLY, "<Инициализаторы>", TokenType.RCURLY]
         }
         
-        # Правила для <Выражение*>
+        # <Выражение*>
         table["<Выражение*>"] = {
-            TokenType.PLUS: [TokenType.PLUS, "<Терм>", "<Выражение*>"],
-            TokenType.MINUS: [TokenType.MINUS, "<Терм>", "<Выражение*>"]
+            TokenType.PLUS: [TokenType.PLUS, "<Терм>", "<gen_op_plus>", "<Выражение*>"], # <gen_op_plus> уже был
+            TokenType.MINUS: [TokenType.MINUS, "<Терм>", "<gen_op_minus>", "<Выражение*>"]
         }
         for token_type in TokenType:
             if token_type not in [TokenType.PLUS, TokenType.MINUS]:
-                if "<Выражение*>" not in table:
-                    table["<Выражение*>"] = {}
-                table["<Выражение*>"][token_type] = []  # lambda
+                table["<Выражение*>"][token_type] = []
         
-        # Правила для <Терм>
+        # <Терм>
         table["<Терм>"] = {
             TokenType.UNARY_MINUS: [TokenType.UNARY_MINUS, "<Фактор>", "<Терм*>"],
-            TokenType.IDENTIFIER: [TokenType.IDENTIFIER, "<ФакторIdent>", "<Терм*>"],
+            TokenType.IDENTIFIER: [
+                "<save_current_token_as_factor>",  # Сохраняем токен перед разбором
+                TokenType.IDENTIFIER, 
+                "<ФакторIdent>", 
+                "<Терм*>"
+            ],
             TokenType.INTEGER_CONST: [TokenType.INTEGER_CONST, "<Терм*>"],
             TokenType.FLOAT_CONST: [TokenType.FLOAT_CONST, "<Терм*>"],
             TokenType.LPAREN: [TokenType.LPAREN, "<Логическое выражение>", TokenType.RPAREN, "<Терм*>"]
         }
         
-        # Правила для <Терм*>
+        # <Терм*>
         table["<Терм*>"] = {
-            TokenType.MULTIPLY: [TokenType.MULTIPLY, "<Фактор>", "<Терм*>"],
-            TokenType.DIVIDE: [TokenType.DIVIDE, "<Фактор>", "<Терм*>"]
+            TokenType.MULTIPLY: [TokenType.MULTIPLY, "<Фактор>", "<gen_op_multiply>", "<Терм*>"],
+            TokenType.DIVIDE: [TokenType.DIVIDE, "<Фактор>", "<gen_op_divide>", "<Терм*>"],
         }
         for token_type in TokenType:
             if token_type not in [TokenType.MULTIPLY, TokenType.DIVIDE]:
-                if "<Терм*>" not in table:
-                    table["<Терм*>"] = {}
-                table["<Терм*>"][token_type] = []  # lambda
+                table["<Терм*>"][token_type] = []
         
-        # Правила для <Фактор>
+        # <Фактор>
         table["<Фактор>"] = {
-            TokenType.UNARY_MINUS: [TokenType.UNARY_MINUS, "<Фактор>"],
-            TokenType.IDENTIFIER: [TokenType.IDENTIFIER, "<ФакторIdent>"],
-            TokenType.INTEGER_CONST: [TokenType.INTEGER_CONST],
-            TokenType.FLOAT_CONST: [TokenType.FLOAT_CONST],
+            TokenType.UNARY_MINUS: [TokenType.UNARY_MINUS, "<Фактор>", "<gen_op_uminus>"],
+            # IDENTIFIER может быть простой переменной или началом доступа к массиву
+            TokenType.IDENTIFIER: [
+                "<save_current_token_as_factor>", # Сохраняем токен идентификатора ДО его обработки
+                TokenType.IDENTIFIER, 
+                "<ФакторIdent>",                 # Обрабатываем возможное '[expr]'
+                "<add_factor_to_rpn_if_not_array>" # Добавляем идентификатор в ОПЗ, если это была не операция доступа к массиву
+            ],
+            TokenType.INTEGER_CONST: [TokenType.INTEGER_CONST], # Уже добавляется в RPN при match
+            TokenType.FLOAT_CONST: [TokenType.FLOAT_CONST],   # Уже добавляется в RPN при match
             TokenType.LPAREN: [TokenType.LPAREN, "<Логическое выражение>", TokenType.RPAREN]
         }
         
-        # Правила для <ФакторIdent>
+        # <ФакторIdent>
         table["<ФакторIdent>"] = {
-            TokenType.LSQUARE: [TokenType.LSQUARE, "<Логическое выражение>", TokenType.RSQUARE]
+            # Если за IDENTIFIER следует LSQUARE, это доступ к элементу массива
+            TokenType.LSQUARE: [
+                "<add_array_name_to_rpn>",  # Добавляем имя массива в RPN
+                TokenType.LSQUARE, 
+                "<Логическое выражение>", # Выражение для индекса
+                TokenType.RSQUARE, 
+                "<gen_array_access_op>"  # Семантическое действие для генерации ОПЗ доступа к массиву
+            ]
         }
-        for token_type in TokenType:
-            if token_type != TokenType.LSQUARE:
-                if "<ФакторIdent>" not in table:
-                    table["<ФакторIdent>"] = {}
-                table["<ФакторIdent>"][token_type] = []  # lambda
+        # Эпсилон-продукции для <ФакторIdent> (если это не доступ к массиву)
+        # Добавляем все токены, которые могут следовать за фактором в выражении
+        follow_factor_ident = [
+            TokenType.MULTIPLY, TokenType.DIVIDE, # Терм*
+            TokenType.PLUS, TokenType.MINUS,      # Выражение*
+            TokenType.LT, TokenType.GT, TokenType.EQ, TokenType.NEQ, # Сравнение*, ПроверкаРавенства*
+            TokenType.AND, TokenType.OR,          # ЛогическоеИ*, ЛогическоеВыражение*
+            TokenType.RPAREN, TokenType.SEMICOLON, TokenType.RSQUARE, TokenType.COMMA, 
+            TokenType.RCURLY, TokenType.EOF # Добавим RCURLY для инициализаторов
+        ]
+        for token_type in follow_factor_ident:
+            if token_type not in table["<ФакторIdent>"]: # Избегаем перезаписи правила для LSQUARE
+                table["<ФакторIdent>"][token_type] = ["<add_factor_to_rpn_if_not_array>"] # Добавляем идентификатор в RPN при эпсилон-продукции
         
-        # Правила для <ВводInput>
+        # <ВводInput>
         table["<ВводInput>"] = {
-            TokenType.IDENTIFIER: [TokenType.IDENTIFIER, "<ВводInputIdent>", TokenType.SEMICOLON]
+            TokenType.IDENTIFIER: ["<save_identifier_token>", TokenType.IDENTIFIER, "<ВводInputIdent>", TokenType.SEMICOLON]
         }
         
-        # Правила для <ВводInputIdent>
+        # <ВводInputIdent>
         table["<ВводInputIdent>"] = {
-            TokenType.LSQUARE: [TokenType.LSQUARE, "<Логическое выражение>", TokenType.RSQUARE]
+            TokenType.LSQUARE: ["<add_input_identifier_to_rpn>", TokenType.LSQUARE, "<Логическое выражение>", TokenType.RSQUARE, "<gen_input_array_op>"]
         }
         for token_type in TokenType:
             if token_type != TokenType.LSQUARE:
-                if "<ВводInputIdent>" not in table:
-                    table["<ВводInputIdent>"] = {}
-                table["<ВводInputIdent>"][token_type] = []  # lambda
+                table["<ВводInputIdent>"][token_type] = ["<add_input_identifier_to_rpn>", "<gen_input_op>"]  # Для простых переменных
         
-        # Правила для <Сравнение>
+        # <Сравнение>
         table["<Сравнение>"] = {
-            TokenType.UNARY_MINUS: [TokenType.UNARY_MINUS, "<Фактор>", "<Терм*>", "<Выражение*>", "<Сравнение*>"],
-            TokenType.IDENTIFIER: [TokenType.IDENTIFIER, "<ФакторIdent>", "<Терм*>", "<Выражение*>", "<Сравнение*>"],
-            TokenType.INTEGER_CONST: [TokenType.INTEGER_CONST, "<Терм*>", "<Выражение*>", "<Сравнение*>"],
-            TokenType.FLOAT_CONST: [TokenType.FLOAT_CONST, "<Терм*>", "<Выражение*>", "<Сравнение*>"],
-            TokenType.LPAREN: [TokenType.LPAREN, "<Логическое выражение>", TokenType.RPAREN, "<Терм*>", "<Выражение*>", "<Сравнение*>"]
+            TokenType.UNARY_MINUS: [TokenType.UNARY_MINUS, "<Фактор>", "<Терм*>", "<Выражение*>"],
+            TokenType.IDENTIFIER: [
+                "<save_current_token_as_factor>",  # Сохраняем токен перед разбором
+                TokenType.IDENTIFIER, 
+                "<ФакторIdent>", 
+                "<Терм*>", 
+                "<Выражение*>"
+            ],
+            TokenType.INTEGER_CONST: [TokenType.INTEGER_CONST, "<Терм*>", "<Выражение*>"],
+            TokenType.FLOAT_CONST: [TokenType.FLOAT_CONST, "<Терм*>", "<Выражение*>"],
+            TokenType.LPAREN: [TokenType.LPAREN, "<Логическое выражение>", TokenType.RPAREN, "<Терм*>", "<Выражение*>"],
         }
-        
-        # Правила для <Сравнение*>
+
+        # <Сравнение*> (обрабатывает <, >)
+        # Операнд для <, > - это <Выражение> (арифметическое)
         table["<Сравнение*>"] = {
-            TokenType.LT: [TokenType.LT, "<Выражение>", "<Сравнение*>"],
-            TokenType.GT: [TokenType.GT, "<Выражение>", "<Сравнение*>"]
+            TokenType.LT: [TokenType.LT, "<Выражение>", "<gen_op_lt>", "<Сравнение*>"],
+            TokenType.GT: [TokenType.GT, "<Выражение>", "<gen_op_gt>", "<Сравнение*>"],
+            # Добавим LE, GE если они есть
         }
-        for token_type in TokenType:
-            if token_type not in [TokenType.LT, TokenType.GT]:
-                if "<Сравнение*>" not in table:
-                    table["<Сравнение*>"] = {}
-                table["<Сравнение*>"][token_type] = []  # lambda
+        follow_sravnenie_star = [
+            TokenType.EQ, TokenType.NEQ, TokenType.AND, TokenType.OR, 
+            TokenType.RPAREN, TokenType.SEMICOLON, TokenType.LCURLY, 
+            TokenType.RSQUARE, TokenType.COMMA, TokenType.EOF
+        ]
+        for token_type in follow_sravnenie_star:
+            if token_type not in table["<Сравнение*>"]:
+                 table["<Сравнение*>"][token_type] = []
         
-        # Правила для <Проверка равенства>
-        table["<Проверка равенства>"] = {
-            TokenType.UNARY_MINUS: ["~", "<Фактор>", "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>"],
-            TokenType.IDENTIFIER: ["идентификатор", "<ФакторIdent>", "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>"],
-            TokenType.INTEGER_CONST: ["константа", "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>"],
-            TokenType.FLOAT_CONST: ["константа", "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>"],
-            TokenType.LPAREN: ["(", "<Логическое выражение>", ")", "<Терм*>", "<Выражение*>", "<Сравнение*>", "<Проверка равенства*>"]
-        }
-        
-        # Правила для <Проверка равенства*>
+        # <Проверка равенства*> (обрабатывает ?, !)
+        # Операнд для ?, ! - это <Выражение><Сравнение*>
         table["<Проверка равенства*>"] = {
-            TokenType.EQ: ["?", "<Сравнение>", "<Проверка равенства*>"],
-            TokenType.NEQ: ["!", "<Сравнение>", "<Проверка равенства*>"]
+            TokenType.EQ: [TokenType.EQ, "<Выражение>", "<Сравнение*>", "<gen_op_eq>", "<Проверка равенства*>"],
+            TokenType.NEQ: [TokenType.NEQ, "<Выражение>", "<Сравнение*>", "<gen_op_neq>", "<Проверка равенства*>"], # Добавим NEQ позже
         }
-        for token_type in TokenType:
-            if token_type not in [TokenType.EQ, TokenType.NEQ]:
-                if "<Проверка равенства*>" not in table:
-                    table["<Проверка равенства*>"] = {}
-                table["<Проверка равенства*>"][token_type] = []
+        follow_proverka_ravenstva_star = [
+            TokenType.AND, TokenType.OR, TokenType.RPAREN, TokenType.SEMICOLON, 
+            TokenType.LCURLY, TokenType.RSQUARE, TokenType.COMMA, TokenType.EOF
+        ]
+        for token_type in follow_proverka_ravenstva_star:
+            if token_type not in table["<Проверка равенства*>"]:
+                 table["<Проверка равенства*>"][token_type] = []
+
+        # <ЛогическоеИ*> (обрабатывает &)
+        # Операнд для & - это <Выражение><Сравнение*><Проверка равенства*>
+        table["<ЛогическоеИ*>"] = {
+            TokenType.AND: [TokenType.AND, "<Выражение>", "<Сравнение*>", "<Проверка равенства*>", "<gen_op_and>", "<ЛогическоеИ*>"],
+        }
+        follow_logicheskoe_i_star = [
+            TokenType.OR, TokenType.RPAREN, TokenType.SEMICOLON, 
+            TokenType.LCURLY, TokenType.RSQUARE, TokenType.COMMA, TokenType.EOF
+        ]
+        for token_type in follow_logicheskoe_i_star:
+            if token_type not in table["<ЛогическоеИ*>"]:
+                 table["<ЛогическоеИ*>"][token_type] = []
+
+        # <ЛогическоеВыражение*> (обрабатывает |)
+        # Операнд для | - это <Выражение><Сравнение*><Проверка равенства*><ЛогическоеИ*>
+        table["<ЛогическоеВыражение*>"] = {
+            TokenType.OR: [TokenType.OR, "<Выражение>", "<Сравнение*>", "<Проверка равенства*>", "<ЛогическоеИ*>", "<gen_op_or>", "<ЛогическоеВыражение*>"],
+        }
+        follow_logicheskoe_virazhenie_star = [
+            TokenType.RPAREN, TokenType.SEMICOLON, TokenType.LCURLY, 
+            TokenType.RSQUARE, TokenType.COMMA, TokenType.EOF
+        ]
+        for token_type in follow_logicheskoe_virazhenie_star:
+            if token_type not in table["<ЛогическоеВыражение*>"]:
+                 table["<ЛогическоеВыражение*>"][token_type] = []
+
+        # Определение для <Инициализаторы> и <Инициализаторы_продолжение>
+        # FIRST(<ЛогВыражение>) уже определен как first_arith_expr
+        first_arith_expr = {TokenType.UNARY_MINUS, TokenType.IDENTIFIER, TokenType.INTEGER_CONST, TokenType.FLOAT_CONST, TokenType.LPAREN, TokenType.LCURLY}
+
+        # Определяем токены, которые могут начинать <Выражение>
+        # Основываясь на существующем определении table["<Выражение>"]
+        first_expression_starters = {
+            TokenType.UNARY_MINUS, TokenType.IDENTIFIER, TokenType.INTEGER_CONST,
+            TokenType.FLOAT_CONST, TokenType.LPAREN, TokenType.LCURLY
+        }
+
+        # Корректное определение для <Инициализаторы>
+        # <Инициализаторы> ::= <Выражение> <Инициализаторы_продолжение> | epsilon (если RCURLY)
+        table["<Инициализаторы>"] = {}
+        for token_type in first_expression_starters:
+            # Если токен может начать <Выражение>, то он может начать список инициализаторов
+            table["<Инициализаторы>"][token_type] = ["<Выражение>", "<Инициализаторы_продолжение>"]
+        # Эпсилон-продукция для пустого списка {} или когда список уже разобран <Инициализаторы_продолжение>
+        table["<Инициализаторы>"][TokenType.RCURLY] = []
+
+        # Новый нетерминал <Инициализаторы_продолжение>
+        # <Инициализаторы_продолжение> ::= COMMA <Выражение> <Инициализаторы_продолжение> | epsilon (если RCURLY)
+        table["<Инициализаторы_продолжение>"] = {
+            TokenType.COMMA: [TokenType.COMMA, "<Выражение>", "<Инициализаторы_продолжение>"],
+            TokenType.RCURLY: []  # Эпсилон-продукция, если достигнут конец списка
+        }
+
+        # Удаляем старое правило <Инициализаторы*>, если оно существует и конфликтует
+        if "<Инициализаторы*>" in table:
+            # Сначала убедимся, что это не то же самое, что мы только что определили
+            # (маловероятно из-за другого имени и структуры)
+            # Это безопасно, если <Инициализаторы*> - это старое, неправильное правило.
+            del table["<Инициализаторы*>"]
         
-        # Аналогично добавляем остальные правила
-        
+        # Правило в <Выражение>, использующее <Инициализаторы>, должно оставаться:
+        # table["<Выражение>"][TokenType.LCURLY] = [TokenType.LCURLY, "<Инициализаторы>", TokenType.RCURLY]
+        # Убедитесь, что оно присутствует и использует именно "<Инициализаторы>".
+        # Судя по вашему коду, оно уже есть:
+        # table["<Выражение"] = {
+        #     ...
+        #     TokenType.LCURLY: [TokenType.LCURLY, "<Инициализаторы>", TokenType.RCURLY]
+        #     ...
+        # }
+
+        # ... остальные правила ...
+
         return table
+
+    def execute_semantic_action(self, action, current_token_arg): # Renamed current_token to current_token_arg to avoid conflict
+        """
+        Выполняет семантическое действие на основе маркера.
+        """
+        # print(f"Семантическое действие: {action} для токена {current_token_arg}")
+
+        if action == "<push_int_type>":
+            self.data_types_stack.append("int")
+        elif action == "<push_float_type>":
+            self.data_types_stack.append("float")
+        elif action == "<save_identifier_token>":
+            if self.current_index < len(self.tokens):
+                 self.context["last_identifier_token"] = self.tokens[self.current_index]
+            else:
+                self.error("Internal parser error: <save_identifier_token> called at end of tokens.")
+
+        elif action == "<add_variable_declaration>":
+            var_token = self.context.get("last_identifier_token")
+            if not var_token or var_token.token_type != TokenType.IDENTIFIER:
+                self.error("Internal parser error: last_identifier_token not set correctly for variable declaration.")
+                return
+
+            var_name = var_token.value
+            if not self.data_types_stack:
+                self.error(f"Internal parser error: data_types_stack is empty for variable {var_name}.")
+                return
+            var_type = self.data_types_stack.pop()
+            
+            self.symbol_table.add_symbol(var_name, var_type, var_token.line, var_token.position, is_array=False)
+            self.context["last_identifier_token"] = None
+
+        elif action == "<add_dynamic_array_declaration>":
+            arr_token = self.context.get("last_identifier_token")
+            if not arr_token or arr_token.token_type != TokenType.IDENTIFIER:
+                self.error("Internal parser error: last_identifier_token not set correctly for dynamic array declaration.")
+                return
+
+            arr_name = arr_token.value
+            if not self.data_types_stack:
+                self.error(f"Internal parser error: data_types_stack is empty for array {arr_name}.")
+                return
+            arr_type = self.data_types_stack.pop() 
+
+            self.symbol_table.add_symbol(arr_name, arr_type, arr_token.line, arr_token.position, is_array=True)
+            # Для динамического массива размер уже находится в RPN (из <Выражение>)
+            # Сначала добавляем имя массива, потом команду DECL_ARR
+            # Порядок на стеке должен быть: [..., arr_name, size] для DECL_ARR
+            self.rpn_generator.add_identifier(arr_name)
+            self.rpn_generator.add_operator('DECL_ARR')
+            self.context["last_identifier_token"] = None
+
+        elif action == "<add_array_declaration>":
+            arr_token = self.context.get("last_identifier_token")
+            if not arr_token or arr_token.token_type != TokenType.IDENTIFIER:
+                self.error("Internal parser error: last_identifier_token not set correctly for array declaration.")
+                return
+
+            arr_name = arr_token.value
+            if not self.data_types_stack:
+                self.error(f"Internal parser error: data_types_stack is empty for array {arr_name}.")
+                return
+            arr_type = self.data_types_stack.pop() 
+
+            self.symbol_table.add_symbol(arr_name, arr_type, arr_token.line, arr_token.position, is_array=True)
+            self.rpn_generator.add_array_declaration(arr_name)
+            self.context["last_identifier_token"] = None
+
+        elif action == "<gen_op_plus>":
+            self.rpn_generator.add_operator('+')
+        elif action == "<gen_op_minus>":
+            self.rpn_generator.add_operator('-')
+        elif action == "<gen_op_uminus>":
+            self.rpn_generator.add_operator('~')
+        elif action == "<gen_op_multiply>":
+            self.rpn_generator.add_operator('*')
+        elif action == "<gen_op_divide>":
+            self.rpn_generator.add_operator('/')
+        elif action == "<gen_op_lt>":
+            self.rpn_generator.add_operator('<')
+        elif action == "<gen_op_gt>":
+            self.rpn_generator.add_operator('>')
+        elif action == "<gen_op_neq>":
+            self.rpn_generator.add_operator('!')
+        elif action == "<gen_op_and>":
+            self.rpn_generator.add_operator('&')
+        elif action == "<gen_op_or>":
+            self.rpn_generator.add_operator('|')
+        elif action == "<save_current_token_as_factor>":
+            # Сохраняем текущий токен идентификатора для возможного использования в факторе
+            if self.current_index < len(self.tokens):
+                self.context["saved_factor_token"] = self.tokens[self.current_index]
+            else:
+                self.error("Internal parser error: <save_current_token_as_factor> called at end of tokens.")
+        elif action == "<add_factor_to_rpn_if_not_array>":
+            # Добавляем идентификатор в ОПС только если это не был доступ к массиву
+            saved_token = self.context.get("saved_factor_token")
+            if saved_token and saved_token.token_type == TokenType.IDENTIFIER:
+                # print(f"DEBUG: Adding factor to RPN: {saved_token.value}")  # Отладка
+                self.rpn_generator.add_identifier(saved_token.value)
+                self.context["saved_factor_token"] = None
+        elif action == "<gen_assign_op>":
+            # Генерируем операцию присваивания
+            self.rpn_generator.add_operator('=')
+        elif action == "<gen_array_assign_op>":
+            # Генерируем операцию присваивания для массива
+            self.rpn_generator.add_operator('array_assign')  # Специальная операция для присваивания массиву
+        elif action == "<gen_output_op>":
+            # Генерируем операцию вывода
+            self.rpn_generator.add_operator('w')
+        elif action == "<add_identifier_to_rpn_for_assign>":
+            # Добавляем идентификатор переменной в RPN для присваивания
+            var_token = self.context.get("last_identifier_token")
+            if var_token and var_token.token_type == TokenType.IDENTIFIER:
+                self.rpn_generator.add_identifier(var_token.value)
+        elif action == "<add_input_identifier_to_rpn>":
+            # Добавляем идентификатор переменной в RPN для операции ввода
+            var_token = self.context.get("last_identifier_token")
+            if var_token and var_token.token_type == TokenType.IDENTIFIER:
+                self.rpn_generator.add_identifier(var_token.value)
+        elif action == "<gen_input_op>":
+            # Генерируем операцию ввода
+            self.rpn_generator.add_operator('r')
+        elif action == "<gen_input_array_op>":
+            # Генерируем операцию ввода в массив
+            # Стек: [array_name, index_expr]
+            # Нужно: прочитать значение, затем присвоить arr[index] = value
+            self.rpn_generator.add_operator('r_array')  # Специальная операция для ввода в массив
+        elif action == "<gen_array_access_op>":
+            # Генерируем операцию доступа к элементу массива
+            # Стек: [array_name, index_expr]
+            # Нужно: получить arr[index]
+            self.rpn_generator.add_operator('array_index')  # Операция индексирования массива
+        elif action == "<add_array_name_to_rpn>":
+            # Добавляем имя массива в RPN для доступа к элементу
+            saved_token = self.context.get("saved_factor_token")
+            if saved_token and saved_token.token_type == TokenType.IDENTIFIER:
+                self.rpn_generator.add_identifier(saved_token.value)
+                self.context["saved_factor_token"] = None  # Очищаем, чтобы <add_factor_to_rpn_if_not_array> не добавил снова
+        elif action == "<while>":
+            # Сохраняем позицию начала цикла while
+            loop_start = len(self.rpn_generator.rpn)  # Текущая длина RPN = следующий индекс
+            if "while_stack" not in self.context:
+                self.context["while_stack"] = []
+            self.context["while_stack"].append({"start": loop_start})
+        elif action == "<after_while_condition>":
+            # После обработки условия добавляем условный переход $JF
+            # Если условие ложно, переходим в конец цикла (адрес пока неизвестен)
+            if "while_stack" not in self.context or not self.context["while_stack"]:
+                raise ValueError("while_stack is empty in <after_while_condition>")
+            
+            # Добавляем $JF и placeholder для адреса
+            self.rpn_generator.add_operator('$JF')
+            jf_address_index = len(self.rpn_generator.rpn)  # Позиция для адреса
+            self.rpn_generator.rpn.append(None)  # Placeholder для адреса перехода
+            
+            # Сохраняем позицию, куда нужно будет записать адрес
+            self.context["while_stack"][-1]["jf_address_index"] = jf_address_index
+        elif action == "<end_while_block>":
+            # В конце блока while добавляем безусловный переход к началу цикла
+            if "while_stack" not in self.context or not self.context["while_stack"]:
+                raise ValueError("while_stack is empty in <end_while_block>")
+            
+            while_info = self.context["while_stack"].pop()
+            loop_start = while_info["start"]
+            jf_address_index = while_info["jf_address_index"]
+            
+            # Добавляем безусловный переход к началу цикла
+            self.rpn_generator.add_operator('$J')
+            self.rpn_generator.rpn.append(loop_start)
+            
+            # Записываем адрес после цикла в placeholder для $JF
+            end_address = len(self.rpn_generator.rpn)  # Адрес ПОСЛЕ добавления $J
+            self.rpn_generator.rpn[jf_address_index] = end_address
         
+        pass
+
+
     def parse(self):
-        """
-        Выполняет синтаксический анализ и генерацию ОПС
-        Возвращает список команд ОПС
-        """
-        parse_table = self.build_parse_table()
-        semantic_actions = self.build_semantic_actions()
+        self.parse_table = self.build_parse_table()
         
         while self.stack:
-            top = self.stack[-1]  # Смотрим на верхний символ стека (без удаления)
-            current_token = self.current_token()
-            
-            # Отладочная информация
-            print(f"Стек: {top}, Токен: {current_token.token_type} = {current_token.value}")
-            
-            # Проверяем наличие семантических действий для данного состояния
-            if top in semantic_actions:
-                action = semantic_actions[top]
-                self.execute_semantic_action(action)
-            
-            # Удаляем верхний символ стека
-            self.stack.pop()
-            
-            if self.is_terminal(top):
-                # Если верхний символ стека - терминал
-                if top == TokenType.EOF and current_token.token_type == TokenType.EOF:
-                    # Достигнут конец файла
-                    break
-                
-                elif top == TokenType.EOF:
-                    self.error(f"Неожиданный конец разбора, ожидался EOF, получен {current_token.token_type}")
-                
-                elif (isinstance(top, TokenType) and top == current_token.token_type) or \
-                     (top == "идентификатор" and current_token.token_type == TokenType.IDENTIFIER) or \
-                     (top == "константа" and (current_token.token_type == TokenType.INTEGER_CONST or current_token.token_type == TokenType.FLOAT_CONST)) or \
-                     (isinstance(top, str) and top in ["(", ")", "{", "}", "[", "]", ",", ";", "+", "-", "*", "/", "<", ">", "=", "!", "?", "&", "|", "~"]):
-                    
-                    # Обработка совпадения токена с терминалом
-                    if top == "идентификатор" or (isinstance(top, TokenType) and top == TokenType.IDENTIFIER):
-                        # Добавление идентификатора в ОПС
-                        self.rpn_generator.add_identifier(current_token.value)
-                    elif top == "константа" or (isinstance(top, TokenType) and (top == TokenType.INTEGER_CONST or top == TokenType.FLOAT_CONST)):
-                        # Добавление константы в ОПС
-                        self.rpn_generator.add_constant(current_token.value)
-                    elif top == "int" or (isinstance(top, TokenType) and top == TokenType.INT):
-                        # Программа 1: Записать тип в стек типов
-                        self.data_types_stack.append("int")
-                    elif top == "float" or (isinstance(top, TokenType) and top == TokenType.FLOAT):
-                        # Программа 1: Записать тип в стек типов
-                        self.data_types_stack.append("float")
-                    # Обработка операторов в строковом представлении
-                    elif top == "?" and current_token.token_type == TokenType.EQ:
-                        pass
-                    elif top == "!" and current_token.token_type == TokenType.NEQ:
-                        pass
-                    elif top == "&" and current_token.token_type == TokenType.AND:
-                        pass
-                    elif top == "|" and current_token.token_type == TokenType.OR:
-                        pass
-                    elif top == "~" and current_token.token_type == TokenType.UNARY_MINUS:
-                        pass
-                    elif top == "+" and current_token.token_type == TokenType.PLUS:
-                        pass
-                    elif top == "-" and current_token.token_type == TokenType.MINUS:
-                        pass
-                    elif top == "*" and current_token.token_type == TokenType.MULTIPLY:
-                        pass
-                    elif top == "/" and current_token.token_type == TokenType.DIVIDE:
-                        pass
-                    elif top == "<" and current_token.token_type == TokenType.LT:
-                        pass
-                    elif top == ">" and current_token.token_type == TokenType.GT:
-                        pass
-                    elif top == "=" and current_token.token_type == TokenType.ASSIGN:
-                        pass
-                    elif top == "(" and current_token.token_type == TokenType.LPAREN:
-                        pass
-                    elif top == ")" and current_token.token_type == TokenType.RPAREN:
-                        pass
-                    elif top == "[" and current_token.token_type == TokenType.LSQUARE:
-                        pass
-                    elif top == "]" and current_token.token_type == TokenType.RSQUARE:
-                        pass
-                    elif top == "{" and current_token.token_type == TokenType.LCURLY:
-                        pass
-                    elif top == "}" and current_token.token_type == TokenType.RCURLY:
-                        pass
-                    elif top == ";" and current_token.token_type == TokenType.SEMICOLON:
-                        pass
-                    elif top == "," and current_token.token_type == TokenType.COMMA:
-                        pass
-                    
-                    self.advance()  # Переходим к следующему токену
-                else:
-                    self.error(f"Ожидался {top}, но получен {current_token.token_type}")
-            
-            elif self.is_nonterminal(top):
-                # Если верхний символ стека - нетерминал
-                
-                # Проверка наличия правила в таблице разбора
-                if top in parse_table and current_token.token_type in parse_table[top]:
-                    # Получаем правило из таблицы разбора
-                    rule = parse_table[top][current_token.token_type]
-                    
-                    # Добавляем символы в стек в обратном порядке (только если правило не пустое)
-                    if rule:  # Проверяем, что правило не пустое (не лямбда)
-                        for symbol in reversed(rule):
-                            self.stack.append(symbol)
-                else:
-                    # Проверяем, есть ли правило для всех терминалов (лямбда)
-                    if top in parse_table:
-                        handled = False
-                        for token_type in parse_table[top]:
-                            if parse_table[top][token_type] == [] and not handled:
-                                # Пустое правило (лямбда)
-                                handled = True
-                                break
-                        
-                        if not handled:
-                            self.error(f"Нет правила для {top} с токеном {current_token.token_type}")
-                    else:
-                        self.error(f"Нетерминал {top} не найден в таблице разбора")
-            
-            else:
-                # Обработка операторов и специальных символов
-                if top == "+":
-                    self.rpn_generator.add_operator("+")
-                elif top == "-":
-                    self.rpn_generator.add_operator("-")
-                elif top == "*":
-                    self.rpn_generator.add_operator("*")
-                elif top == "/":
-                    self.rpn_generator.add_operator("/")
-                elif top == "<":
-                    self.rpn_generator.add_operator("<")
-                elif top == ">":
-                    self.rpn_generator.add_operator(">")
-                elif top == "!":
-                    self.rpn_generator.add_operator("!")
-                elif top == "?":
-                    self.rpn_generator.add_operator("?")
-                elif top == "&":
-                    self.rpn_generator.add_operator("&")
-                elif top == "|":
-                    self.rpn_generator.add_operator("|")
-                elif top == "~":
-                    self.rpn_generator.add_operator("~")
-                elif top == "=":
-                    self.rpn_generator.add_operator("=")
-                elif isinstance(top, TokenType):
-                    # Обработка TokenType операторов
-                    if top == TokenType.PLUS:
-                        self.rpn_generator.add_operator("+")
-                    elif top == TokenType.MINUS:
-                        self.rpn_generator.add_operator("-")
-                    elif top == TokenType.MULTIPLY:
-                        self.rpn_generator.add_operator("*")
-                    elif top == TokenType.DIVIDE:
-                        self.rpn_generator.add_operator("/")
-                    elif top == TokenType.LT:
-                        self.rpn_generator.add_operator("<")
-                    elif top == TokenType.GT:
-                        self.rpn_generator.add_operator(">")
-                    elif top == TokenType.NEQ:
-                        self.rpn_generator.add_operator("!")
-                    elif top == TokenType.EQ:
-                        self.rpn_generator.add_operator("?")
-                    elif top == TokenType.AND:
-                        self.rpn_generator.add_operator("&")
-                    elif top == TokenType.OR:
-                        self.rpn_generator.add_operator("|")
-                    elif top == TokenType.UNARY_MINUS:
-                        self.rpn_generator.add_operator("~")
-                    elif top == TokenType.ASSIGN:
-                        self.rpn_generator.add_operator("=")
-                elif top == TokenType.LSQUARE or top == "[":
-                    # Программа 2: Дописать признак массива к типу
-                    if self.data_types_stack and self.context["in_array_declaration"]:
-                        current_type = self.data_types_stack.pop()
-                        self.data_types_stack.append(current_type + "arr")
-                elif top == "EOF" or top == TokenType.EOF:
-                    # Конец разбора
-                    if current_token.token_type != TokenType.EOF:
-                        self.error(f"Ожидался конец файла, но получен {current_token.token_type}")
-                    break
-        
-        return self.rpn_generator.get_rpn()
-    
-    def is_terminal(self, symbol):
-        """Проверяет, является ли символ терминальным"""
-        terminal_strings = ["идентификатор", "константа", "(", ")", "{", "}", "[", "]", 
-                         ",", ";", "+", "-", "*", "/", "<", ">", "=", "!", "?", 
-                         "&", "|", "~", "int", "float", "if", "else", "while", 
-                         "input", "output", "EOF"]
-        
-        return isinstance(symbol, TokenType) or symbol in terminal_strings
-    
-    def is_nonterminal(self, symbol):
-        """Проверяет, является ли символ нетерминальным"""
-        return isinstance(symbol, str) and symbol.startswith("<") and symbol.endswith(">")
-    
-    def build_semantic_actions(self):
-        """
-        Строит словарь семантических действий для различных контекстов
-        Возвращает словарь: {символ или состояние: действие}
-        """
-        actions = {}
-        
-        # Семантические программы для нетерминалов
-        actions["<while>"] = "program6"  # Начало цикла while
-        actions["<after_while_condition>"] = "program7"  # После условия while
-        actions["<end_while_block>"] = "program8"  # Конец блока while
-        actions["<after_if_condition>"] = "program9"  # После условия if
-        actions["<end_if_block>"] = "program10"  # Конец блока if без else
-        actions["<start_else_block>"] = "program11"  # Начало блока else
-        
-        # Семантические программы для операторов и других контекстов
-        actions["output"] = "add_w"  # Добавить операцию вывода
-        actions["input"] = "add_r"  # Добавить операцию ввода
-        actions["["] = "array_index"  # Индексация массива
-        actions["$init"] = "init_array"  # Инициализация массива
-        
-        return actions
-    
-    def execute_semantic_action(self, action):
-        """Выполняет семантическую программу"""
-        if action == "program6":
-            # Программа 6: Начало цикла while
-            self.label_stack.append(str(self.rpn_generator.get_current_index()))
-            
-        elif action == "program7":
-            # Программа 7: После условия while
-            self.label_stack.append(str(self.rpn_generator.get_current_index()))
-            self.rpn_generator.add_conditional_jump()  # jf с заполнителем
-            
-        elif action == "program8":
-            # Программа 8: Конец блока while
-            jf_addr = self.label_stack.pop()  # Адрес команды jf
-            start_addr = self.label_stack.pop()  # Адрес начала цикла
-            
-            # Заполняем метку для jf
-            self.rpn_generator.replace_label_placeholder("_", str(self.rpn_generator.get_current_index() + 2))
-            
-            # Добавляем безусловный переход на начало цикла
-            self.rpn_generator.add_jump(start_addr)
-            
-        elif action == "program9":
-            # Программа 9: После условия if
-            self.label_stack.append(str(self.rpn_generator.get_current_index()))
-            self.rpn_generator.add_conditional_jump()  # jf с заполнителем
-            
-        elif action == "program10":
-            # Программа 10: Конец if без else
-            jf_addr = self.label_stack.pop()  # Адрес команды jf
-            # Заполняем метку для jf
-            self.rpn_generator.replace_label_placeholder("_", str(self.rpn_generator.get_current_index()))
-            
-        elif action == "program11":
-            # Программа 11: Начало блока else
-            jf_addr = self.label_stack.pop()  # Адрес команды jf (из программы 9)
-            
-            # Записываем адрес текущей команды j
-            self.label_stack.append(str(self.rpn_generator.get_current_index()))
-            
-            # Добавляем безусловный переход для пропуска блока else
-            self.rpn_generator.add_jump(None)  # j с заполнителем
-            
-            # Заполняем метку для jf из программы 9 (переход на начало блока else)
-            self.rpn_generator.replace_label_placeholder("_", str(self.rpn_generator.get_current_index()))
-            
-        elif action == "add_w":
-            # Добавить операцию вывода
-            self.rpn_generator.add_operator("w")
-            
-        elif action == "add_r":
-            # Добавить операцию ввода
-            self.rpn_generator.add_operator("r")
-            
-        elif action == "array_index":
-            # Индексация массива
-            self.rpn_generator.add_operator("i")
-        
-        elif action == "init_array":
-            # Инициализация массива
-            self.rpn_generator.add_operator("init")
-    
-    def handle_variable_declaration(self, identifier):
-        """Обрабатывает объявление переменной"""
-        if not self.data_types_stack:
-            self.error(f"Ошибка: тип данных не определен для {identifier}")
-            return
-        
-        data_type = self.data_types_stack.pop()
-        
-        # Проверка на повторное объявление
-        if self.symbol_table.exists(identifier):
-            self.error(f"Ошибка: повторное объявление '{identifier}'")
-            return
-        
-        # Добавляем переменную в таблицу символов
-        self.symbol_table.add_variable(identifier, data_type)
-        
-        # Добавляем идентификатор в ОПС
-        self.rpn_generator.add_identifier(identifier)
-    
-    def handle_array_declaration(self, identifier):
-        """Обрабатывает объявление массива"""
-        if not self.data_types_stack:
-            self.error(f"Ошибка: тип данных не определен для массива {identifier}")
-            return
-        
-        data_type = self.data_types_stack.pop()
-        
-        # Проверка, что тип содержит признак массива
-        if not data_type.endswith("arr"):
-            self.error(f"Ошибка: ожидался тип массива, получен {data_type}")
-            return
-        
-        # Проверка на повторное объявление
-        if self.symbol_table.exists(identifier):
-            self.error(f"Ошибка: повторное объявление '{identifier}'")
-            return
-        
-        # Добавляем массив в таблицу символов
-        self.symbol_table.add_variable(identifier, data_type)
-        
-        # Добавляем идентификатор в ОПС
-        self.rpn_generator.add_identifier(identifier)
-        
-        # Для инициализации массива с помощью списка {...}
-        if self.context["in_array_initialization"]:
-            self.rpn_generator.add_operator("GEN")
-    
-    def is_terminal(self, symbol):
-        """Проверяет, является ли символ терминальным"""
-        terminal_strings = ["идентификатор", "константа", "(", ")", "{", "}", "[", "]", 
-                          ",", ";", "+", "-", "*", "/", "<", ">", "=", "!", "?", 
-                          "&", "|", "~", "int", "float", "if", "else", "while", 
-                          "input", "output", "EOF"]
-        
-        # Проверка на TokenType или строковые представления терминалов
-        return isinstance(symbol, TokenType) or symbol in terminal_strings
-    
-    def is_nonterminal(self, symbol):
-        """Проверяет, является ли символ нетерминальным"""
-        return isinstance(symbol, str) and symbol.startswith("<") and symbol.endswith(">")
+            top_of_stack = self.stack[-1]
+            # current_token variable is defined here and shadows the argument if it had the same name
+            current_token_loop = self.current_token() 
 
+            # print(f\\"Стек: {self.stack}\\")
+            # print(f\\"Текущий токен: {current_token_loop}\\")
 
-class SyntaxError(Exception):
-    """Исключение для синтаксических ошибок"""
-    pass
+            if top_of_stack == TokenType.EOF and current_token_loop.token_type == TokenType.EOF:
+                # print(\\"Разбор успешно завершен.\\")
+                break
+
+            if isinstance(top_of_stack, TokenType) and top_of_stack == current_token_loop.token_type:
+                self.stack.pop()
+                # Добавляем константы в ОПЗ здесь
+                if top_of_stack == TokenType.INTEGER_CONST or top_of_stack == TokenType.FLOAT_CONST:
+                    self.rpn_generator.add_constant(current_token_loop.value)
+                # Идентификаторы как операнды теперь обрабатываются через семантические действия в правилах (<add_factor_to_rpn_if_not_array>)
+                # Старый 'pass' для TokenType.IDENTIFIER здесь был правильным, т.к. обработка зависит от контекста правила.
+                
+                self.advance()
+            elif isinstance(top_of_stack, str) and top_of_stack.startswith("<") and top_of_stack.endswith(">") and (
+                 not top_of_stack.startswith("<gen_") and not top_of_stack.startswith("<after_") and
+                 not top_of_stack.startswith("<end_") and not top_of_stack.startswith("<start_") and
+                 not top_of_stack.startswith("<while") and not top_of_stack.startswith("<push_") and
+                 not top_of_stack.startswith("<save_") and not top_of_stack.startswith("<add_")): # Non-terminal
+                
+                rule = self.parse_table.get(top_of_stack, {}).get(current_token_loop.token_type)
+                if rule is None:
+                    expected_tokens = list(self.parse_table.get(top_of_stack, {}).keys())
+                    self.error(f"Ожидался один из токенов {expected_tokens} или правило для нетерминала '{top_of_stack}' не найдено для токена {current_token_loop.token_type}, но получен {current_token_loop.token_type} ('{current_token_loop.value}')")
+                    break 
+                
+                self.stack.pop()
+                for symbol in reversed(rule):
+                    self.stack.append(symbol)
+            elif isinstance(top_of_stack, str) and (top_of_stack.startswith("<gen_") or top_of_stack.startswith("<after_") or top_of_stack.startswith("<end_") or top_of_stack.startswith("<start_") or top_of_stack.startswith("<while") or top_of_stack.startswith("<push_") or top_of_stack.startswith("<save_") or top_of_stack.startswith("<add_")): # Semantic action
+                action_to_execute = self.stack.pop()
+                # Pass current_token_loop (local to parse loop) to semantic actions
+                self.execute_semantic_action(action_to_execute, current_token_loop) 
+            else: 
+                self.error(f"Несоответствие токена. Ожидался {top_of_stack}, но получен {current_token_loop.token_type} ('{current_token_loop.value}') или неизвестный символ в стеке.")
+                break
+        
+        # print(f\\"Финальная RPN: {self.rpn_generator.rpn}\\")
+        # print(f\\"Таблица символов: {self.symbol_table.symbols}\\")
+        return self.rpn_generator.rpn, self.symbol_table

@@ -1,0 +1,27 @@
+int a;
+int b;
+a = 10;
+b = 20;
+
+if (a ? b) {
+    int c;
+    c = a - b;
+    output c;
+} else {
+    int k;
+    k = 5; 
+    output k;
+}
+
+a = 7;
+b = 7; 
+
+if (a ? b) {
+    int c2; 
+    c2 = a + b; 
+    output c2;
+} else {
+    int k2;
+    k2 = 0;
+    output k2;
+}

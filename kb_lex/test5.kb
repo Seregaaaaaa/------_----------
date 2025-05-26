@@ -1,5 +1,16 @@
-float [] arrFL = {5.1, 2.2, 8.3, 3.4, 1.5, 9.6, 4.7, 6.8, 7.9, 0.11};
+float [10] arrFL;
+arrFL[0] = 5.1;
+arrFL[1] = 2.2;
+arrFL[2] = 8.3;
+arrFL[3] = 3.4;
+arrFL[4] = 1.5;
+arrFL[5] = 9.6;
+arrFL[6] = 4.7;
+arrFL[7] = 6.8;
+arrFL[8] = 7.9;
+arrFL[9] = 0.11;
 
-float a = 2.0 * arrFL[1];
+float a;
+a = 2.0 * arrFL[1];
 
 output a;
