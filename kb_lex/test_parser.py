@@ -3,12 +3,7 @@ from src.lexer import analyze
 from src.parser import Parser
 
 def run_parser_test(filename):
-    """
-    Запускает тестирование синтаксического анализатора и генератора ОПС
-    
-    Args:
-        filename: Путь к файлу с исходным кодом для анализа
-    """
+
     with open(filename, 'r', encoding='utf-8') as file:
         source_code = file.read()
     
@@ -30,8 +25,10 @@ def run_parser_test(filename):
         
         print("\nРезультаты синтаксического анализа (ОПС):")
         print("-" * 50)
-        for i, command in enumerate(rpn):
-            print(f"{i}: {command}")
+        print('RPN:', ' '.join(list(map(str, rpn[0]))))
+        #for i, j in enumerate(rpn[0]):
+        #    print(i, j)
+        #print('SymbolTable: ', rpn[1])
         
         print("\nАнализ успешно завершен!")
         return True

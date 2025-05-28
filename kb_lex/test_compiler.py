@@ -1,7 +1,6 @@
 import sys
 import os
 
-# Добавляем путь к родительскому каталогу, чтобы можно было импортировать src
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
@@ -18,7 +17,6 @@ def main():
     filepath = sys.argv[1]
     input_values = []
     
-    # Парсим входные данные из аргументов командной строки
     if len(sys.argv) > 2:
         for arg in sys.argv[2:]:
             try:
@@ -42,7 +40,6 @@ def main():
 
     compiler = Compiler()
     
-    # Передаем входные данные в компилятор
     if input_values:
         compiler.set_input_values(input_values)
 
@@ -51,10 +48,8 @@ def main():
     print("-" * 30)
 
     try:
-        # Компиляция и выполнение
         program_output, final_symbol_table = compiler.execute(source_code)
 
-        # Получение результатов этапов
         tokens = compiler.get_tokens()
         rpn = compiler.get_rpn()
 
@@ -91,17 +86,12 @@ def main():
                 print("(пусто)")
             print("-" * 30)
         else:
-            # Ошибка компиляции или выполнения уже должна была быть выведена
-            # или перехвачена выше и вызвала бы sys.exit(1)
-            # Этот блок может быть достигнут, если execute возвращает (None, None)
-            # из-за ошибки, обработанной внутри Compiler.parse()
             print("Компиляция или выполнение не удалось. Подробности см. выше.")
             sys.exit(1)
 
 
     except Exception as e:
         print(f"Произошла ошибка во время компиляции или выполнения: {e}")
-        # Дополнительно выведем токены и ОПЗ, если они успели сгенерироваться
         tokens = compiler.get_tokens()
         rpn = compiler.get_rpn()
         if tokens:
